@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"grpc-go-course/greet/greetpb"
+	"grpc/gRPC/greet/greetpb"
 	"io"
 	"log"
 	"time"
@@ -26,7 +26,9 @@ func main() {
 	//fmt.Printf("Created client : %f", c)
 	//doUnary(c)
 	//doServerStreaming(c)
-	doClientStreaming(c)
+	//doClientStreaming(c)
+
+	doBiDirectionalStreaming(c)
 }
 
 func doUnary(c greetpb.GreetServiceClient) {
@@ -120,4 +122,73 @@ func doClientStreaming(c greetpb.GreetServiceClient) {
 		log.Fatalf("Error while receivong %v", err)
 	}
 	fmt.Printf("%v", res)
+}
+
+func doBiDirectionalStreaming(c greetpb.GreetServiceClient) {
+	fmt.Println("Started BiDi streaming RPC...")
+	requests := []*greetpb.GreetEveryOneRequest{
+		&greetpb.GreetEveryOneRequest{
+			Result: &greetpb.Greeting{
+				FirstName: "Sivaprasad",
+			},
+		},
+		&greetpb.GreetEveryOneRequest{
+			Result: &greetpb.Greeting{
+				FirstName: "Prasad",
+			},
+		},
+		&greetpb.GreetEveryOneRequest{
+			Result: &greetpb.Greeting{
+				FirstName: "Bhuvan",
+			},
+		},
+		&greetpb.GreetEveryOneRequest{
+			Result: &greetpb.Greeting{
+				FirstName: "Charitha",
+			},
+		},
+		&greetpb.GreetEveryOneRequest{
+			Result: &greetpb.Greeting{
+				FirstName: "Teja",
+			},
+		},
+	}
+	// We create a stream by invokingg a client
+	stream, err := c.GreetEveryOne(context.Background())
+
+	if err != nil {
+		log.Fatalf("Error while creating a stream %v", err)
+	}
+	waitc := make(chan struct{})
+	// we send a bunch of messages to the client(ggo routines)
+	go func() {
+		// function to send bunch of requests
+		for _, req := range requests {
+			fmt.Printf("Sending message %v\n", req)
+			stream.Send(req)
+			time.Sleep(1 * time.Second)
+		}
+		stream.CloseSend()
+	}()
+	// we receive a bunch messages from the server (go routine)
+	go func() {
+		for {
+			res, err := stream.Recv()
+
+			if err == io.EOF {
+				break
+			}
+
+			if err != nil {
+				log.Fatalf("Error while receiving %v\n", err)
+				break
+			}
+
+			fmt.Printf("Received %v\n", res.GetResult())
+		}
+		close(waitc)
+	}()
+	// block until everythingg is done
+
+	<-waitc
 }
